@@ -1,6 +1,6 @@
 # webrtc
-the basic use of webrtc by JS
-use node event source as signal server
+The basic use of webrtc by JS
+and use node event source as signal server
 
 Install node package
 
