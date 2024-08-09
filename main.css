@@ -39,9 +39,8 @@ button:hover {
 }
 
 .video-player {
-    width: 500px;
+    /* width: 500px; */
     height: 500px;
-    background-color: black;
     margin: 10px;
     border-radius: 10px;
 }
@@ -54,3 +53,55 @@ button:hover {
     cursor: pointer;
     margin-right: 10px;
 }
+
+#volumeControl {
+    display: flex;
+    align-items: center;
+  }
+
+  #volumeControl svg {
+    width: 32px;
+    height: 32px;
+    transition: fill 0.3s; /* Smooth color transition */
+  }
+
+  #volumeControl svg:hover {
+    fill: #007bff; /* Change color on hover */
+  }
+
+  #volume {
+    -webkit-appearance: none; /* Remove default styling */
+    height: 8px; /* Height of the slider */
+    background: #ddd; /* Slider background color */
+    outline: none; /* Remove outline */
+    border-radius: 4px; /* Rounded edges */
+    transition: background 0.3s; /* Smooth background transition */
+  }
+
+  #volume::-webkit-slider-thumb {
+    -webkit-appearance: none; /* Remove default thumb styling */
+    width: 16px; /* Width of the thumb */
+    height: 16px; /* Height of the thumb */
+    background: #007bff; /* Thumb color */
+    border-radius: 50%; /* Make the thumb round */
+    cursor: pointer; /* Change cursor to pointer */
+    transition: background 0.3s; /* Smooth background transition */
+  }
+
+  #volume::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+
+  #volume:hover {
+    background: #ccc; /* Change background color on hover */
+  }
+
+  #volume::-webkit-slider-thumb:hover,
+  #volume::-moz-range-thumb:hover {
+    background: #0056b3; /* Darker thumb color on hover */
+  }

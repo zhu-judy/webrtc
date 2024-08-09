@@ -3,6 +3,9 @@ let localStream;
 let remoteStream;
 let remoteEndpoint;
 let offerSdp;
+let audioContext;
+let localGainNode;
+let remoteGainNode;
 let servers = {
   iceServers: [
     { url: 'stun:stun.gmx.net:3478' },
@@ -59,19 +62,42 @@ function requestToCall() {
   })
 }
 
-let init = async () => {
-  // const connection = await fetchConnection({ assistid: "ssss", type: "AV" }).catch(error => {
-  //   console.log('fetch connection error:', error)
-  // });
+const initStream = async () => {
+  try {
+    remoteStream = new MediaStream();
+  
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: {
+        echoCancellation: true, // Enable echo cancellation
+        noiseSuppression: true, // Enable noise suppression
+        autoGainControl: true, // Enable automatic gain control
+      },
+    })
 
-  // for (let i = 0; i < connection.turns.length; i++) {
-  //   servers.iceServers.push({
-  //     urls: connection.turns[i],
-  //     username: connection.user,
-  //     credential: connection.credential,
-  //   });
-  // }
-  // remoteEndpoint = connection.devendpoint;
+    toggleAudio();
+    document.getElementById("user-2").srcObject = remoteStream;
+    document.getElementById("user-1").srcObject = localStream;
+    document.getElementById("user-1").muted = true
+    document.getElementById("user-1").volume = 0
+
+
+    const volumeControl = document.getElementById('volume');
+    volumeControl.addEventListener('input', function() {
+            // document.getElementById("user-1").volume = this.value
+            document.getElementById("user-2").volume = this.value
+
+
+    });
+    console.log("finish init local stream")
+    return localStream
+  } catch (error) {
+    alert("cannot get your camera!");
+    console.log('get camera error', error)
+  }
+};
+let init = async () => {
+
   const eventSource = new EventSource("http://localhost:3000/api/events"); // Replace with your actual SSE endpoint
   eventSource.onopen = () => {
     console.log("open event");
@@ -81,21 +107,51 @@ let init = async () => {
     console.error("EventSource failed:", error);
     eventSource.close();
   };
-  try{
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: false,
-    });
-    document.getElementById("user-1").srcObject = localStream;
-    return
+  await initStream();
+  volumeDomRender()
 
-  }  catch (error) {
-    alert('cannot get your camera!')
-  }
-  toggleAudio();
-  remoteStream = new MediaStream();
-  document.getElementById("user-2").srcObject = remoteStream;
 };
+
+function volumeDomRender() {
+  const volumeControl = document.getElementById('volumeControl');
+  const volumeSlider = document.getElementById('volume');
+  const volumeOff = document.getElementById('volumeOff');
+  const volumeOn = document.getElementById('volumeOn');
+  volumeOn.addEventListener('click', () => {
+    document.getElementById("user-2").volume = 0
+    volumeSlider.value = 0
+
+    volumeOff.style.display ='block'
+    volumeOn.style.display='none'
+
+  })
+  volumeOff.addEventListener('click', () => {
+    document.getElementById("user-2").volume = 1
+    volumeSlider.value = 1
+
+    volumeOff.style.display ='none'
+    volumeOn.style.display='block'
+
+  })
+  volumeControl.addEventListener('mouseenter', () => {
+      volumeSlider.style.display = 'block';
+  });
+  
+  volumeControl.addEventListener('mouseleave', () => {
+      volumeSlider.style.display = 'none';
+  });
+  volumeSlider.addEventListener('input', function() {
+    if(this.value == 0) {
+      volumeOff.style.display ='block'
+      volumeOn.style.display='none'
+    } else {
+      volumeOff.style.display ='none'
+      volumeOn.style.display='block'
+    }
+    document.getElementById("user-2").volume = this.value
+
+  });
+}
 
 const handleSignalingMessage = async (event) => {
   const message = event.data;
@@ -154,6 +210,7 @@ let handleMessageFromPeer = async (message) => {
   }
 };
 
+
 let fetchConnection = async (data) => {
   return fetch(mgtUrl + "/api/connection", {
     method: "POST",
@@ -183,7 +240,10 @@ let sendMsg = async (data) => {
   })
 };
 
-let createPeerConnection = async (sdpType) => {
+let createPeerConnection = async () => {
+  if (!localStream) {
+    localStream = await initStream();
+  }
   peerConnection = new RTCPeerConnection(servers);
 
   console.log("Add localStream to peerConnection.");
@@ -191,13 +251,12 @@ let createPeerConnection = async (sdpType) => {
     peerConnection.addTrack(track, localStream);
   });
 
-  remoteStream = new MediaStream();
-  document.getElementById("user-2").srcObject = remoteStream;
   peerConnection.ontrack = async (event) => {
     console.log("Add remoteStream to peerConnection.");
     event.streams[0].getTracks().forEach((track) => {
       remoteStream.addTrack(track);
     });
+
   };
 
   peerConnection.onconnectionstatechange = () => {
@@ -217,6 +276,8 @@ let createPeerConnection = async (sdpType) => {
       });
     }
   };
+
+  return peerConnection;
 };
 
 let showVideo = () => {
@@ -237,7 +298,7 @@ let hiddenVideo = () => {
 let createOffer = async () => {
   showVideo();
   console.log("Creating offer-sdp.");
-  createPeerConnection("offer-sdp");
+  await createPeerConnection();
   let offer = await peerConnection.createOffer();
   console.log("offer-sdp Created.");
   console.log("set offer-sdp to LocalDescription.");
@@ -249,7 +310,7 @@ let createOffer = async () => {
 
 let createAnswer = async (offer) => {
   console.log("Creating answer-sdp.");
-  createPeerConnection("answer-sdp");
+  await createPeerConnection();
 
   if (!offer) return alert("Retrieve offer from peer first...");
   console.log("set offer-sdp to RemoteDescription.");

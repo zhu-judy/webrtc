@@ -3,6 +3,7 @@ let localStream;
 let remoteStream;
 let remoteEndpoint;
 let offerSdp;
+
 let servers = {
   iceServers: [
     { url: 'stun:stun.gmx.net:3478' },
@@ -12,7 +13,7 @@ let servers = {
     { url: 'stun:stun3.l.google.com:19302' },
   ]
 };
-let mgtUrl = "http://localhost:5000";
+let mgtUrl = "http://130.147.232.250:5000";
 function toggleVideo() {
   if (localStream && localStream.getVideoTracks().length > 0) {
     var videoTrack = localStream.getVideoTracks()[0];
@@ -58,21 +59,73 @@ function requestToCall() {
 
   })
 }
+function volumeDomRender() {
+  const volumeControl = document.getElementById('volumeControl');
+  const volumeSlider = document.getElementById('volume');
+  const volumeOff = document.getElementById('volumeOff');
+  const volumeOn = document.getElementById('volumeOn');
+  volumeOn.addEventListener('click', () => {
+    document.getElementById("user-2").volume = 0
+    volumeSlider.value = 0
 
+    volumeOff.style.display ='block'
+    volumeOn.style.display='none'
+
+  })
+  volumeOff.addEventListener('click', () => {
+    document.getElementById("user-2").volume = 1
+    volumeSlider.value = 1
+
+    volumeOff.style.display ='none'
+    volumeOn.style.display='block'
+
+  })
+  
+  volumeControl.addEventListener('mouseenter', () => {
+      volumeSlider.style.display = 'block';
+  });
+  
+  volumeControl.addEventListener('mouseleave', () => {
+      volumeSlider.style.display = 'none';
+  });
+  volumeSlider.addEventListener('input', function() {
+    if(this.value == 0) {
+      volumeOff.style.display ='block'
+      volumeOn.style.display='none'
+    } else {
+      volumeOff.style.display ='none'
+      volumeOn.style.display='block'
+    }
+    document.getElementById("user-2").volume = this.value
+
+  });
+}
+
+const initStream = async () => {
+  try {
+    remoteStream = new MediaStream();
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    
+    toggleAudio();
+    document.getElementById("user-2").srcObject = remoteStream;
+
+    document.getElementById("user-1").srcObject = localStream;
+    document.getElementById("user-1").muted = true
+    document.getElementById("user-1").volume = 0
+
+    console.log("finish init local stream")
+    return localStream
+  } catch (error) {
+    alert("cannot get your camera!");
+    console.log('get camera error', error)
+  }
+};
 let init = async () => {
-  // const connection = await fetchConnection({ assistid: "ssss", type: "AV" }).catch(error => {
-  //   console.log('fetch connection error:', error)
-  // });
 
-  // for (let i = 0; i < connection.turns.length; i++) {
-  //   servers.iceServers.push({
-  //     urls: connection.turns[i],
-  //     username: connection.user,
-  //     credential: connection.credential,
-  //   });
-  // }
-  // remoteEndpoint = connection.devendpoint;
-  const eventSource = new EventSource("http://localhost:5000/api/events"); // Replace with your actual SSE endpoint
+  const eventSource = new EventSource("http://130.147.232.250:5000/api/events"); // Replace with your actual SSE endpoint
   eventSource.onopen = () => {
     console.log("open event");
   };
@@ -81,20 +134,8 @@ let init = async () => {
     console.error("EventSource failed:", error);
     eventSource.close();
   };
-  try{
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: false,
-    });
-    document.getElementById("user-1").srcObject = localStream;
-    return
-
-  }  catch (error) {
-    alert('cannot get your camera!')
-  }
-  toggleAudio();
-  remoteStream = new MediaStream();
-  document.getElementById("user-2").srcObject = remoteStream;
+  await initStream()
+  volumeDomRender()
 };
 
 const handleSignalingMessage = async (event) => {
@@ -134,13 +175,6 @@ let handleMessageFromPeer = async (message) => {
   }
   if (message.type === "offer") {
     showVideo();
-    if (!localStream) {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
-      document.getElementById("user-1").srcObject = localStream;
-    }
 
     // offerSdp = JSON.stringify(message);
     createAnswer(message);
@@ -154,23 +188,6 @@ let handleMessageFromPeer = async (message) => {
   }
 };
 
-let fetchConnection = async (data) => {
-  return fetch(mgtUrl + "/api/connection", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      return data;
-      console.log("Success:", data);
-    })
-    .catch((error) => {
-      console.error("Error:", error);
-    });
-};
 
 let sendMsg = async (data) => {
   (data.to = remoteEndpoint), console.log(data);
@@ -184,6 +201,9 @@ let sendMsg = async (data) => {
 };
 
 let createPeerConnection = async (sdpType) => {
+  if (!localStream) {
+    localStream = await initStream();
+  }
   peerConnection = new RTCPeerConnection(servers);
 
   console.log("Add localStream to peerConnection.");
@@ -191,8 +211,6 @@ let createPeerConnection = async (sdpType) => {
     peerConnection.addTrack(track, localStream);
   });
 
-  remoteStream = new MediaStream();
-  document.getElementById("user-2").srcObject = remoteStream;
   peerConnection.ontrack = async (event) => {
     console.log("Add remoteStream to peerConnection.");
     event.streams[0].getTracks().forEach((track) => {
@@ -216,6 +234,7 @@ let createPeerConnection = async (sdpType) => {
       });
     }
   };
+  return peerConnection
 };
 
 let showVideo = () => {
@@ -235,8 +254,7 @@ let hiddenVideo = () => {
 
 let createOffer = async () => {
   showVideo();
-  console.log("Creating offer-sdp.");
-  createPeerConnection("offer-sdp");
+  await createPeerConnection("offer-sdp");
   let offer = await peerConnection.createOffer();
   console.log("offer-sdp Created.");
   console.log("set offer-sdp to LocalDescription.");
@@ -248,14 +266,13 @@ let createOffer = async () => {
 
 let createAnswer = async (offer) => {
   console.log("Creating answer-sdp.");
-  createPeerConnection("answer-sdp");
+  await createPeerConnection("answer-sdp");
 
   if (!offer) return alert("Retrieve offer from peer first...");
   console.log("set offer-sdp to RemoteDescription.");
   await peerConnection.setRemoteDescription(offer);
 
   let answer = await peerConnection.createAnswer();
-  console.log("answer-sdp Created.");
   console.log("set answer-sdp to LocalDescription.");
   await peerConnection.setLocalDescription(answer);
   await sendMsg({
